@@ -1,6 +1,5 @@
 name: DevSecOps Security Scan
 
-# Déclencheurs : exécuter le scan sur la branche principale et lors des PR
 on:
   push:
     branches: [ "main", "master" ]
@@ -13,31 +12,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Étape 1 : Récupérer le code source du dépôt
+      # Étape 1 : Récupérer le code source
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Trufflehog a besoin de tout l'historique pour scanner les commits passés
+          fetch-depth: 0
 
       # Étape 2 : Scan des Secrets (TruffleHog)
-      # Cet outil cherche les clés API, mots de passe ou tokens cachés dans votre historique Git
       - name: TruffleHog OSS Secret Scan
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-         # base: ${{ github.event.repository.default_branch }}
           base: ${{ github.event.before }}
           head: ${{ github.sha }}
-         # head: HEAD
-          extra_args: --debug --only-verified # --only-verified tente de valider la clé auprès du fournisseur (ex: AWS) pour éviter les faux positifs
+          extra_args: --only-verified
 
-      # Étape 3 : Scan des Dépendances et Vulnérabilités (Trivy)
-      # Cet outil cherche les failles connues dans vos packages (package.json, requirements.txt, etc.)
-      - name: Run Trivy vulnerability scanner
+      # Étape 3 : Scan des Dépendances (Trivy fs)
+      - name: Run Trivy FS scanner (packages)
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs' # 'fs' signifie qu'on scanne le système de fichiers du projet
+          scan-type: 'fs'
           scan-ref: '.'
           format: 'table'
-          exit-code: '1' # Fait échouer le pipeline (statut rouge) si une vulnérabilité est trouvée
-          severity: 'CRITICAL,HIGH' # On ne bloque le pipeline que pour les failles critiques ou élevées
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # ==========================================
+      # SÉCURITÉ DOCKER (CONSTRUCTION & DOUBLE SCAN)
+      # ==========================================
+
+      # Étape 4 : Construire l'image Docker localement
+      - name: Build Docker Image
+        run: |
+          docker build -t mon-app:test .
+
+      # Étape 5 : Premier Scan de l'image (Trivy Image)
+      - name: Run Trivy Image scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'mon-app:test'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      # Connexion obligatoire à Docker Hub pour que Docker Scout fonctionne
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Étape 6 : Deuxième Scan de l'image (Docker Scout)
+      # Analyse croisée pour n'avoir aucun angle mort
+      - name: Run Docker Scout cves scan
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: mon-app:test
+          exit-code: true # Fait échouer le pipeline si Docker Scout trouve des failles selon vos politiques de sécurité
+          only-severities: critical,high # On se concentre uniquement sur le plus dangereux
