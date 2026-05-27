@@ -72,3 +72,10 @@ jobs:
           image: mon-app:test
           exit-code: true # Fait échouer le pipeline si Docker Scout trouve des failles selon vos politiques de sécurité
           only-severities: critical,high # On se concentre uniquement sur le plus dangereux
+
+  # Étape 7 : Scan SAST de votre propre code source (Semgrep)
+      - name: Run Semgrep OSS
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: p/security-audit # Utilise le pack de règles de sécurité standards
+          exit-code: true # Fait échouer le pipeline si une faille de code est détectée
