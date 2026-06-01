@@ -1,0 +1,176 @@
+---
+- name: Installer K3s et enregistrer GitHub self-hosted runner sur SR1
+  hosts: github_runner
+  become: yes
+
+  vars:
+    runner_user: aria1
+    runner_name: sr1
+    runner_dir: /home/aria1/actions-runner
+
+    github_owner: YKNB
+    github_repo: MyAria
+    github_repo_url: "https://github.com/{{ github_owner }}/{{ github_repo }}"
+
+    runner_version: "2.321.0"
+    runner_labels: "self-hosted,linux,x64,sr1,k3s"
+
+    k3s_node_ip: "192.168.56.30"
+
+  tasks:
+    - name: Installer les dépendances système
+      apt:
+        name:
+          - curl
+          - tar
+          - git
+          - jq
+          - sudo
+          - ca-certificates
+        state: present
+        update_cache: yes
+
+    - name: Installer K3s
+      shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--node-ip={{ k3s_node_ip }} --write-kubeconfig-mode=644" sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Attendre que K3s soit prêt
+      command: kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml get nodes
+      register: k3s_nodes
+      retries: 20
+      delay: 10
+      until: k3s_nodes.rc == 0
+      changed_when: false
+
+    - name: Créer le dossier kubeconfig pour aria1
+      file:
+        path: /home/aria1/.kube
+        state: directory
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        mode: "0755"
+
+    - name: Copier kubeconfig pour aria1
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/aria1/.kube/config
+        remote_src: yes
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        mode: "0600"
+
+    - name: Adapter kubeconfig pour aria1
+      replace:
+        path: /home/aria1/.kube/config
+        regexp: 'https://127.0.0.1:6443'
+        replace: 'https://{{ k3s_node_ip }}:6443'
+
+    - name: Récupérer le registration token GitHub via API
+      uri:
+        url: "https://api.github.com/repos/{{ github_owner }}/{{ github_repo }}/actions/runners/registration-token"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ github_pat }}"
+          Accept: "application/vnd.github+json"
+          X-GitHub-Api-Version: "2022-11-28"
+        status_code: 201
+      register: github_registration_token
+      no_log: true
+
+    - name: Créer le dossier du runner
+      file:
+        path: "{{ runner_dir }}"
+        state: directory
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        mode: "0755"
+
+    - name: Télécharger GitHub Actions Runner
+      get_url:
+        url: "https://github.com/actions/runner/releases/download/v{{ runner_version }}/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
+        dest: "/tmp/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
+        mode: "0644"
+        # CORRECTION DEVSECOPS : Validation de l'intégrité du binaire officiel
+        checksum: "sha256:ba415f793b8908709ca889700b0eab699b867c4fa46b6239105f3ad3b0f56a5c"
+
+    - name: Extraire GitHub Actions Runner
+      unarchive:
+        src: "/tmp/actions-runner-linux-x64-{{ runner_version }}.tar.gz"
+        dest: "{{ runner_dir }}"
+        remote_src: yes
+        owner: "{{ runner_user }}"
+        group: "{{ runner_user }}"
+        creates: "{{ runner_dir }}/config.sh"
+
+    - name: Vérifier si le runner est déjà configuré
+      stat:
+        path: "{{ runner_dir }}/.runner"
+      register: runner_config
+
+    - name: Arrêter le service runner s’il existe déjà
+      command: ./svc.sh stop
+      args:
+        chdir: "{{ runner_dir }}"
+      failed_when: false
+      changed_when: false
+      when: runner_config.stat.exists
+
+    - name: Supprimer l’ancienne configuration runner si existante
+      become_user: "{{ runner_user }}"
+      command: >
+        ./config.sh remove
+        --token {{ github_registration_token.json.token | default('') }}
+      args:
+        chdir: "{{ runner_dir }}"
+      failed_when: false
+      when: runner_config.stat.exists
+      no_log: true
+
+    - name: Configurer le runner GitHub
+      become_user: "{{ runner_user }}"
+      command: >
+        ./config.sh
+        --url {{ github_repo_url }}
+        --token {{ github_registration_token.json.token }}
+        --name {{ runner_name }}
+        --labels {{ runner_labels }}
+        --work _work
+        --unattended
+        --replace
+      args:
+        chdir: "{{ runner_dir }}"
+      no_log: true
+
+    - name: Installer le runner comme service systemd
+      command: ./svc.sh install {{ runner_user }}
+      args:
+        chdir: "{{ runner_dir }}"
+      failed_when: false
+
+    - name: Démarrer le service runner
+      command: ./svc.sh start
+      args:
+        chdir: "{{ runner_dir }}"
+
+    - name: Vérifier le statut du service runner
+      command: ./svc.sh status
+      args:
+        chdir: "{{ runner_dir }}"
+      register: runner_status
+      changed_when: false
+
+    - name: Afficher le statut du runner
+      debug:
+        var: runner_status.stdout_lines
+
+    - name: Vérifier les nodes K3s
+      command: kubectl --kubeconfig /home/aria1/.kube/config get nodes -o wide
+      become_user: "{{ runner_user }}"
+      register: final_k3s_nodes
+      changed_when: false
+
+    - name: Afficher les nodes K3s
+      debug:
+        var: final_k3s_nodes.stdout_lines

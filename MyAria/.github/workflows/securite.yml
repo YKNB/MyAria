@@ -79,3 +79,24 @@ jobs:
         with:
           config: p/security-audit # Utilise le pack de règles de sécurité standards
           exit-code: true # Fait échouer le pipeline si une faille de code est détectée
+
+# Étape 9 : Configurer la clé SSH pour Ansible
+      - name: Setup SSH Key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+ # Étape 10 : Exécuter le scan Checkov (IaC) pour valider l'Ansible
+      - name: Run Checkov IaC Scanner
+        uses: bridgecrewio/checkov-action@master
+        with:
+          framework: ansible
+          output_format: cli
+          soft_fail: false
+
+ # Étape 11 : Déploiement de l'infrastructure avec Ansible
+      - name: Run Ansible Playbook
+        run: |
+          # On désactive temporairement la vérification stricte du host key pour le lab
+          export ANSIBLE_HOST_KEY_CHECKING=False
+          ansible-playbook -i inventory.ini install-github-runner.yml -e  ${{ secrets.TOKEN_GITHUB }} 
