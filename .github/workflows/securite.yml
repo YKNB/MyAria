@@ -85,6 +85,7 @@ jobs:
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          
 
  # Étape 10 : Exécuter le scan Checkov (IaC) pour valider l'Ansible
       - name: Run Checkov IaC Scanner
@@ -99,4 +100,4 @@ jobs:
         run: |
           # On désactive temporairement la vérification stricte du host key pour le lab
           export ANSIBLE_HOST_KEY_CHECKING=False
-          ansible-playbook -i inventory.ini install-github-runner.yml -e  ${{ secrets.TOKEN_GITHUB }} 
+          ansible-playbook -i inventory.ini install-github-runner.yml -e "github_pat=${{ secrets.TOKEN_GITHUB }}"
