@@ -98,10 +98,3 @@ jobs:
           framework: ansible
           output_format: cli
           soft_fail: false
-
- # Étape 11 : Déploiement de l'infrastructure avec Ansible
-      - name: Run Ansible Playbook
-        run: |
-          # On désactive temporairement la vérification stricte du host key pour le lab
-          export ANSIBLE_HOST_KEY_CHECKING=False
-          ansible-playbook -i inventory.ini install-github-runner.yml -e "github_pat=${{ secrets.TOKEN_GITHUB }}"
