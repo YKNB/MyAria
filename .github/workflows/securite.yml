@@ -9,8 +9,8 @@ on:
 jobs:
   security-audit:
     name: Run Security Scans
-    runs-on: ubuntu-latest
-
+    # runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       # Étape 1 : Récupérer le code source
       - name: Checkout code
