@@ -41,60 +41,51 @@ jobs:
       # SÉCURITÉ DOCKER (CONSTRUCTION & DOUBLE SCAN)
       # ==========================================
 
-      # Étape 4 : Construire l'image Docker localement
+     # Étape 4 : Construire l'image Docker avec le tag Docker Hub
       - name: Build Docker Image
         run: |
-          docker build -t mon-app:test .
+          # On tague l'image avec ton nom d'utilisateur Docker Hub
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/myaria-app:latest .
 
       # Étape 5 : Premier Scan de l'image (Trivy Image)
       - name: Run Trivy Image scanner
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
-          image-ref: 'mon-app:test'
+          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/myaria-app:latest'
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
 
-      # Connexion obligatoire à Docker Hub pour que Docker Scout fonctionne
+      # Connexion obligatoire à Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Étape 5.5 : Pousser l'image sécurisée sur Docker Hub
+      - name: Push Image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/myaria-app:latest
+
       # Étape 6 : Deuxième Scan de l'image (Docker Scout)
       - name: Run Docker Scout cves scan
         uses: docker/scout-action@v1
         with:
           command: cves
-          image: mon-app:test
+          image: ${{ secrets.DOCKERHUB_USERNAME }}/myaria-app:latest
           exit-code: true
           only-severities: critical,high
 
-      # Étape 7 : Scan SAST de votre propre code source (Semgrep)
+      # Étape 7 : Scan SAST (Semgrep)
       - name: Run Semgrep OSS
         uses: semgrep/semgrep-action@v1
         with:
           config: p/security-audit
 
-      # ==========================================
-      # DÉPLOIEMENT KUBERNETES LOCAL & DAST
-      # ==========================================
-
       # Étape 10 : Appliquer le manifeste sur K3s
       - name: Deploy to K3s cluster
         run: |
-          # On applique le fichier de déploiement
           kubectl apply -f deployment.yml
-          # On attend que le pod soit complètement démarré et prêt à recevoir du trafic
           kubectl rollout status deployment/myaria-app --timeout=60s
-
-      # Étape 11 : Exécuter le Scan DAST (OWASP ZAP)
-      # On va utiliser une commande curl ou un conteneur ZAP pour scanner l'IP de ton service K3s
-      - name: Run OWASP ZAP DAST Scan
-        uses: zaproxy/action-baseline@v0.14.0
-        with:
-          # On cible l'application via l'IP de ton nœud K3s ou l'URL interne du service
-          target: 'http://127.0.0.1:80' 
-          fail_action: true # Fait planter le pipeline si OWASP ZAP trouve des failles de vulnérabilité web

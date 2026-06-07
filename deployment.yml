@@ -14,10 +14,13 @@ spec:
       labels:
         app: myaria
     spec:
+      # Ligne Sec : Permet à K3s de se connecter à ton Docker Hub privé
+      imagePullSecrets:
+      - name: dockerhub-secret
       containers:
       - name: myaria-container
-        image: mon-app:test # L'image buildée localement à l'étape 4
-        imagePullPolicy: Never # Force K3s à utiliser l'image locale sans la chercher sur le web
+        image: YKNB/myaria-app:latest # Remplace par TON_USER_DOCKERHUB/myaria-app:latest si besoin
+        imagePullPolicy: Always # Force le pull depuis Internet
         ports:
         - containerPort: 80
         securityContext:
