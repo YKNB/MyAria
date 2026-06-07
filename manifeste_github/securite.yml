@@ -8,9 +8,9 @@ on:
 
 jobs:
   security-audit:
-    name: Run Security Scans & DAST
-    runs-on: self-hosted # Exécuté localement sur ta VM SR1
-
+    name: Run Security Scans
+   # runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       # Étape 1 : Récupérer le code source
       - name: Checkout code
@@ -64,37 +64,31 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Étape 6 : Deuxième Scan de l'image (Docker Scout)
+      # Analyse croisée pour n'avoir aucun angle mort
       - name: Run Docker Scout cves scan
         uses: docker/scout-action@v1
         with:
           command: cves
           image: mon-app:test
-          exit-code: true
-          only-severities: critical,high
+          exit-code: true # Fait échouer le pipeline si Docker Scout trouve des failles selon vos politiques de sécurité
+          only-severities: critical,high # On se concentre uniquement sur le plus dangereux
 
-      # Étape 7 : Scan SAST de votre propre code source (Semgrep)
+  # Étape 7 : Scan SAST de votre propre code source (Semgrep)
       - name: Run Semgrep OSS
         uses: semgrep/semgrep-action@v1
         with:
-          config: p/security-audit
+          config: p/security-audit # Utilise le pack de règles de sécurité standards
 
-      # ==========================================
-      # DÉPLOIEMENT KUBERNETES LOCAL & DAST
-      # ==========================================
 
-      # Étape 10 : Appliquer le manifeste sur K3s
-      - name: Deploy to K3s cluster
-        run: |
-          # On applique le fichier de déploiement
-          kubectl apply -f deployment.yml
-          # On attend que le pod soit complètement démarré et prêt à recevoir du trafic
-          kubectl rollout status deployment/myaria-app --timeout=60s
-
-      # Étape 11 : Exécuter le Scan DAST (OWASP ZAP)
-      # On va utiliser une commande curl ou un conteneur ZAP pour scanner l'IP de ton service K3s
-      - name: Run OWASP ZAP DAST Scan
-        uses: zaproxy/action-baseline@v0.14.0
+   # Étape 10 : Exécuter le scan Checkov (IaC) pour valider l'Ansible
+      - name: Run Checkov IaC Scanner
+        uses: bridgecrewio/checkov-action@master
         with:
-          # On cible l'application via l'IP de ton nœud K3s ou l'URL interne du service
-          target: 'http://127.0.0.1:80' 
-          fail_action: true # Fait planter le pipeline si OWASP ZAP trouve des failles de vulnérabilité web
+          framework: ansible
+          output_format: cli
+          soft_fail: false
+
+  # Étape 11 : Déploiement local de l'infrastructure avec Ansible
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook -i inventory.ini install-github-runner.yml -e "github_pat=${{ secrets.TOKEN_GITHUB }}"

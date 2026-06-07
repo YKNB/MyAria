@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myaria-app
+  labels:
+    app: myaria
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myaria
+  template:
+    metadata:
+      labels:
+        app: myaria
+    spec:
+      containers:
+      - name: myaria-container
+        image: mon-app:test # L'image buildée localement à l'étape 4
+        imagePullPolicy: Never # Force K3s à utiliser l'image locale sans la chercher sur le web
+        ports:
+        - containerPort: 80
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myaria-service
+spec:
+  type: ClusterIP
+  selector:
+    app: myaria
+  ports:
+  - port: 80
+    targetPort: 80
