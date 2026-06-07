@@ -19,7 +19,7 @@ spec:
       - name: dockerhub-secret
       containers:
       - name: myaria-container
-        image: YKNB/myaria-app:latest # Remplace par TON_USER_DOCKERHUB/myaria-app:latest si besoin
+        image: karl123/myaria-app:latest # Remplace par TON_USER_DOCKERHUB/myaria-app:latest si besoin
         imagePullPolicy: Always # Force le pull depuis Internet
         ports:
         - containerPort: 80
