@@ -10,7 +10,11 @@ jobs:
   security-audit:
     name: Run Security Scans & DAST
     runs-on: self-hosted # Exécuté localement sur ta VM SR1
-
+# AJOUT DE CETTE DIRECTIVE DE SÉCURITÉ GITHUB :
+    permissions:
+      contents: read
+      issues: write   # Permet à OWASP ZAP de créer le ticket d'alerte
+      pull-requests: write
     steps:
       # Étape 1 : Récupérer le code source
       - name: Checkout code
