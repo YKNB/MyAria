@@ -17,19 +17,18 @@ COPY . .
 RUN npm run build
 
 # ==========================================
-# ÉTAPE 2 : La Production (Environnement léger)
+# ÉTAPE 2 : La Production (Environnement léger et sécurisé)
 # ==========================================
-FROM nginx:1-alpine-slim
+FROM nginxinc/nginx-unprivileged:1-alpine-slim
 
-# On supprime la conf par défaut et on copie notre bloc "server" propre
+# On supprime la conf par défaut de l'image unprivileged et on met la nôtre
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copie des fichiers compilés Angular
 COPY --from=build /app/dist/MyAria/browser /usr/share/nginx/html
 
-# Exposer le port non-root pour la visibilité
 EXPOSE 8080
 
-# Injection magique DevSecOps : on configure Nginx pour tourner dans /tmp à la volée !
-CMD ["nginx", "-g", "daemon off; pid /tmp/nginx.pid; client_body_temp_path /tmp/client_temp; proxy_temp_path /tmp/proxy_temp_path; fastcgi_temp_path /tmp/fastcgi_temp; uwsgi_temp_path /tmp/uwsgi_temp; scgi_temp_path /tmp/scgi_temp;"]
+# Plus besoin de forcer les chemins avec -g, l'image le fait nativement de son côté !
+CMD ["nginx", "-g", "daemon off;"]
