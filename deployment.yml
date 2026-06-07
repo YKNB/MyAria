@@ -14,15 +14,14 @@ spec:
       labels:
         app: myaria
     spec:
-      # Ligne Sec : Permet à K3s de se connecter à ton Docker Hub privé
       imagePullSecrets:
       - name: dockerhub-secret
       containers:
       - name: myaria-container
-        image: karl123/myaria-app:latest # Remplace par TON_USER_DOCKERHUB/myaria-app:latest si besoin
-        imagePullPolicy: Always # Force le pull depuis Internet
+        image: docker.io/karl123/myaria-app:latest
+        imagePullPolicy: Always
         ports:
-        - containerPort: 80
+        - containerPort: 8080 # <-- MODIFICATION : Le conteneur écoute sur 8080 en interne
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
@@ -33,9 +32,10 @@ kind: Service
 metadata:
   name: myaria-service
 spec:
-  type: ClusterIP
+  type: NodePort # <-- MODIFICATION : On passe en NodePort pour que le DAST puisse y accéder depuis la VM
   selector:
     app: myaria
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 80       # Le port du service reste 80
+    targetPort: 8080 # <-- MODIFICATION : Il redirige le trafic vers le 8080 du conteneur
+    nodePort: 30080  # <-- MODIFICATION : Bloque le port 30080 sur ta VM pour le scan DAST

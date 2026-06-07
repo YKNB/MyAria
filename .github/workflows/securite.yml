@@ -84,8 +84,16 @@ jobs:
         with:
           config: p/security-audit
 
-      # Étape 10 : Appliquer le manifeste sur K3s
+     # Étape 10 : Appliquer le manifeste mis à jour sur K3s
       - name: Deploy to K3s cluster
         run: |
           kubectl apply -f deployment.yml
-          kubectl rollout status deployment/myaria-app --timeout=60s
+          kubectl rollout status deployment/myaria-app --timeout=90s
+
+      # Étape 11 : Lancement du Scan DAST (OWASP ZAP Baseline)
+      - name: Run OWASP ZAP DAST Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          # On attaque l'application via le port NodePort exposé sur la boucle locale de ta VM
+          target: 'http://127.0.0.1:30080'
+          fail_action: false # Mets "true" si tu veux bloquer le pipeline en cas de vulnérabilité web trouvée
