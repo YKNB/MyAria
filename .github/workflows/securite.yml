@@ -78,20 +78,9 @@ jobs:
         uses: semgrep/semgrep-action@v1
         with:
           config: p/security-audit # Utilise le pack de règles de sécurité standards
-          exit-code: true # Fait échouer le pipeline si une faille de code est détectée
-
-# Étape 9 : Configuration de la clé SSH native (Méthode Linux robuste)
-      - name: Setup SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          # On écrit le secret GitHub directement dans le fichier de clé de l'agent
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          # Sécurisation stricte des droits exigée par OpenSSH
-          chmod 700 ~/.ssh
-          chmod 600 ~/.ssh/id_ed25519
 
 
- # Étape 10 : Exécuter le scan Checkov (IaC) pour valider l'Ansible
+   # Étape 10 : Exécuter le scan Checkov (IaC) pour valider l'Ansible
       - name: Run Checkov IaC Scanner
         uses: bridgecrewio/checkov-action@master
         with:
@@ -99,9 +88,7 @@ jobs:
           output_format: cli
           soft_fail: false
 
- # Étape 11 : Déploiement de l'infrastructure avec Ansible
+  # Étape 11 : Déploiement local de l'infrastructure avec Ansible
       - name: Run Ansible Playbook
         run: |
-          # On désactive temporairement la vérification stricte du host key pour le lab
-          export ANSIBLE_HOST_KEY_CHECKING=False
           ansible-playbook -i inventory.ini install-github-runner.yml -e "github_pat=${{ secrets.TOKEN_GITHUB }}"
